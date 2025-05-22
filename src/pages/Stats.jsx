@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import XPGoals from "../components/XPgoals";
 
 const Stats = () => {
   const user = auth.currentUser;
@@ -124,6 +125,8 @@ const Stats = () => {
           </p>
         </div>
       </div>
+
+      {user && <XPGoals habits={habits} userId={user.uid} totalXP={totalXP} />}
 
       {habits.length === 0 ? (
         <p className="text-center text-gray-400">
