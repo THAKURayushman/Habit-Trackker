@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import XPGoals from "../components/XPgoals";
+import XPGoals from "../components/XPGoals";
 
 const Stats = () => {
   const user = auth.currentUser;
