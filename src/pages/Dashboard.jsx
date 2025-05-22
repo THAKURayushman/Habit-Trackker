@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
-import { useDispatch, useSelector } from "react-redux";
-import { subscribeToHabits } from "../redux/habitsSlice";
+import StreakCalendar from "../components/StreakCalendar";
+
 import {
   collection,
   query,
@@ -42,28 +42,6 @@ const calculateLongestStreak = (completions = {}) => {
     if (streak > longest) longest = streak;
   }
   return longest || (dates.length > 0 ? 1 : 0);
-};
-
-// Streak Calendar Component
-const StreakCalendar = ({ completions }) => {
-  const days = [];
-  const today = new Date();
-
-  for (let i = 29; i >= 0; i--) {
-    const day = new Date();
-    day.setDate(today.getDate() - i);
-    const dayStr = formatDate(day);
-    days.push(
-      <div
-        key={dayStr}
-        title={dayStr}
-        className={`w-5 h-5 m-0.5 rounded ${
-          completions && completions[dayStr] ? "bg-green-500" : "bg-gray-700"
-        }`}
-      />
-    );
-  }
-  return <div className="flex flex-wrap w-full max-w-xs">{days}</div>;
 };
 
 const Dashboard = () => {
@@ -195,7 +173,7 @@ const Dashboard = () => {
     );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto min-h-screen bg-gray-900 text-white rounded-lg shadow-lg">
+    <div className="p-6 max-w-4xl mx-auto min-h-screen bg-gray-900 text-white rounded-lg shadow-lg overflow-x-hidden">
       <h1 className="text-3xl font-extrabold mb-6 text-center">
         🎯 Welcome, {user.displayName?.split(" ")[0] || "User"}!
       </h1>
