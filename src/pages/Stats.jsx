@@ -31,16 +31,65 @@ const Stats = () => {
     fetchHabits();
   }, [user]);
 
-  // Calculate totals and streaks
-  const totalXP = habits.reduce((acc, h) => acc + (h.xp || 0), 0);
+  // Helper: count total completions (number of keys in completions object)
+  const countCompletions = (completions = {}) =>
+    Object.keys(completions).length;
+
+  // Helper: Calculate longest streak from completions object
+  const calculateLongestStreak = (completions = {}) => {
+    const dates = Object.keys(completions)
+      .map((d) => new Date(d))
+      .sort((a, b) => a - b);
+
+    let longest = 0;
+    let streak = 1;
+
+    for (let i = 1; i < dates.length; i++) {
+      const diff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
+      if (diff === 1) {
+        streak++;
+      } else {
+        streak = 1;
+      }
+      if (streak > longest) longest = streak;
+    }
+    return longest || (dates.length > 0 ? 1 : 0);
+  };
+
+  // Helper: Calculate current streak from completions object
+  const calculateCurrentStreak = (completions = {}) => {
+    let streak = 0;
+    let today = new Date();
+    for (let i = 0; ; i++) {
+      const day = new Date();
+      day.setDate(today.getDate() - i);
+      const dayStr = day.toISOString().slice(0, 10);
+      if (completions[dayStr]) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  };
+
+  // Calculate totals for all habits
   const totalCompleted = habits.reduce(
-    (acc, h) => acc + (h.completedCount || 0),
+    (acc, habit) => acc + countCompletions(habit.completions),
     0
   );
 
-  // For simplicity, longest streak: max of habit.streak or 0
+  // Assuming each habit has xpReward field for XP per completion
+  // Total XP = sum of (xpReward * completionsCount)
+  const totalXP = habits.reduce(
+    (acc, habit) =>
+      acc + (habit.xpReward || 0) * countCompletions(habit.completions),
+    0
+  );
+
+  // Longest streak across all habits
   const longestStreak = habits.reduce(
-    (acc, h) => Math.max(acc, h.streak || 0),
+    (acc, habit) => Math.max(acc, calculateLongestStreak(habit.completions)),
     0
   );
 
@@ -84,22 +133,30 @@ const Stats = () => {
         <div>
           <h3 className="text-2xl font-semibold mb-4">Your Habits</h3>
           <div className="space-y-4">
-            {habits.map(({ id, title, completedCount, xp, streak }) => (
-              <div
-                key={id}
-                className="bg-gray-700 p-4 rounded-md flex justify-between items-center shadow-sm"
-              >
-                <div>
-                  <h4 className="text-lg font-semibold text-blue-300">
-                    {title}
-                  </h4>
-                  <p className="text-gray-400 text-sm">
-                    Completed: {completedCount} times | XP: {xp || 0} | Streak:{" "}
-                    {streak || 0} days
-                  </p>
+            {habits.map(({ id, title, completions, xpReward }) => {
+              const completedCount = countCompletions(completions);
+              const longest = calculateLongestStreak(completions);
+              const currentStreak = calculateCurrentStreak(completions);
+              const totalXPForHabit = (xpReward || 0) * completedCount;
+
+              return (
+                <div
+                  key={id}
+                  className="bg-gray-700 p-4 rounded-md flex justify-between items-center shadow-sm"
+                >
+                  <div>
+                    <h4 className="text-lg font-semibold text-blue-300">
+                      {title}
+                    </h4>
+                    <p className="text-gray-400 text-sm">
+                      Completed: {completedCount} times | XP: {totalXPForHabit}{" "}
+                      | Longest Streak: {longest} days | Current Streak:{" "}
+                      {currentStreak} days
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
