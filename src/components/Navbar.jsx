@@ -28,7 +28,7 @@ const Navbar = ({ user }) => {
     <nav className="bg-indigo-600 text-white p-4 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
       <h1 className="text-xl font-bold">🎯 Habit Hero</h1>
       <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-6">
-        <Link className="hover:underline" to="/">
+        <Link className="hover:underline" to="/dashboard">
           Dashboard
         </Link>
         <Link className="hover:underline" to="/stats">
