@@ -2,18 +2,26 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../firebase";
 
-const Navbar = () => {
+const Navbar = ({ user }) => {
   const navigate = useNavigate();
   const [confirmLogout, setConfirmLogout] = useState(false);
 
   const handleLogout = () => {
     if (confirmLogout) {
-      auth.signOut();
-      navigate("/login");
+      try {
+        auth.signOut();
+        navigate("/");
+      } catch (err) {
+        console.error("Logout failed:", err);
+      }
     } else {
       setConfirmLogout(true);
       setTimeout(() => setConfirmLogout(false), 3000); // reset confirmation after 3s
     }
+  };
+
+  const handleLoginRedirect = () => {
+    navigate("/login");
   };
 
   return (
@@ -26,15 +34,28 @@ const Navbar = () => {
         <Link className="hover:underline" to="/stats">
           Stats
         </Link>
-        <Link className="hover:underline" to="/settings">
-          Settings
-        </Link>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded-md transition"
-        >
-          {confirmLogout ? "Click again to confirm Logout" : "Logout"}
-        </button>
+        {!user?.isAnonymous && (
+          <Link className="hover:underline" to="/settings">
+            Settings
+          </Link>
+        )}
+
+        {/* Show Login for anonymous users, Logout for others */}
+        {user?.isAnonymous ? (
+          <button
+            onClick={handleLoginRedirect}
+            className="bg-red-500 hover:bg-blue-800 px-3 py-1 rounded-md transition"
+          >
+            Login
+          </button>
+        ) : (
+          <button
+            onClick={handleLogout}
+            className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded-md transition"
+          >
+            {confirmLogout ? "Click again to confirm Logout" : "Logout"}
+          </button>
+        )}
       </div>
     </nav>
   );
