@@ -12,6 +12,7 @@
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.2",
     "@tailwindcss/vite": "^4.1.7",
+    "axios": "^1.10.0",
     "firebase": "^11.8.1",
     "framer-motion": "^12.19.2",
     "react": "^19.1.0",

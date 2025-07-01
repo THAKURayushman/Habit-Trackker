@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
+import axios from "axios";
 import StreakCalendar from "../components/StreakCalendar";
-
 import {
   collection,
   query,
@@ -14,10 +14,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-// Format date as YYYY-MM-DD
 const formatDate = (date) => date.toISOString().slice(0, 10);
 
-// Calculate current streak
 const calculateCurrentStreak = (completions = {}) => {
   let streak = 0;
   let today = new Date();
@@ -30,7 +28,6 @@ const calculateCurrentStreak = (completions = {}) => {
   return streak;
 };
 
-// Calculate longest streak
 const calculateLongestStreak = (completions = {}) => {
   const dates = Object.keys(completions).sort();
   let longest = 0,
@@ -48,38 +45,36 @@ const Dashboard = () => {
   const user = auth.currentUser;
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [newHabit, setNewHabit] = useState({
     title: "",
     icon: "",
     xpReward: 5,
   });
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [editingHabit, setEditingHabit] = useState(null);
 
-  // Fetch habits from Firestore
   useEffect(() => {
     if (!user) return;
-
     const fetchHabits = async () => {
       setLoading(true);
       try {
         const habitsRef = collection(db, "habits");
         const q = query(habitsRef, where("uid", "==", user.uid));
         const snapshot = await getDocs(q);
-        const userHabits = [];
-        snapshot.forEach((doc) =>
-          userHabits.push({ id: doc.id, ...doc.data() })
-        );
+        const userHabits = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
         setHabits(userHabits);
       } catch (err) {
         console.error("Error fetching habits:", err);
       }
       setLoading(false);
     };
-
     fetchHabits();
   }, [user]);
 
-  // Add new habit
   const handleAddHabit = async (e) => {
     e.preventDefault();
     if (!newHabit.title.trim() || !newHabit.icon.trim()) return;
@@ -96,35 +91,24 @@ const Dashboard = () => {
 
       setHabits((prev) => [
         ...prev,
-        {
-          id: docRef.id,
-          title: newHabit.title.trim(),
-          icon: newHabit.icon.trim(),
-          xpReward: Number(newHabit.xpReward) || 5,
-          completions: {},
-        },
+        { id: docRef.id, ...newHabit, completions: {} },
       ]);
-
       setNewHabit({ title: "", icon: "", xpReward: 5 });
     } catch (err) {
       console.error("Error adding habit:", err);
     }
   };
 
-  // Toggle completion for today
   const handleToggleComplete = async (habit) => {
-    if (!habit) return;
     const today = formatDate(new Date());
-    const completions = habit.completions || {};
+    if (habit.completions?.[today]) return;
 
-    // If already completed today, ignore (or you can allow toggle off by removing this)
-    if (completions[today]) return;
-
-    const updatedCompletions = { ...completions, [today]: true };
+    const updatedCompletions = { ...habit.completions, [today]: true };
 
     try {
-      const habitDoc = doc(db, "habits", habit.id);
-      await updateDoc(habitDoc, { completions: updatedCompletions });
+      await updateDoc(doc(db, "habits", habit.id), {
+        completions: updatedCompletions,
+      });
       setHabits((prev) =>
         prev.map((h) =>
           h.id === habit.id ? { ...h, completions: updatedCompletions } : h
@@ -135,10 +119,8 @@ const Dashboard = () => {
     }
   };
 
-  // Delete habit
   const handleDeleteHabit = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this habit?")) return;
-
+    if (!window.confirm("Delete this habit?")) return;
     try {
       await deleteDoc(doc(db, "habits", id));
       setHabits((prev) => prev.filter((h) => h.id !== id));
@@ -147,27 +129,89 @@ const Dashboard = () => {
     }
   };
 
-  // Edit habit (simple prompt for demo)
-  const handleEditHabit = async (habit) => {
-    const newTitle = prompt("Edit habit title:", habit.title);
-    if (!newTitle || !newTitle.trim()) return;
+  const handleEditHabit = (habit) => {
+    setEditingHabit({ ...habit }); // Open modal with prefilled habit
+  };
+
+  const fetchAiSuggestions = async () => {
+    if (!habits.length) return;
+    setLoadingAI(true);
+
+    const titles = habits.map((h) => h.title).join(", ");
+    const prompt = `I've added these habits: ${titles}. Suggest 3 new daily habits that support consistency and enhance these existing habits. 
+For each suggestion, give a short title and a one-line benefit. Respond in this format:
+Habit: <title>
+Benefit: <one-line reason why it’s useful>`;
 
     try {
-      const habitDoc = doc(db, "habits", habit.id);
-      await updateDoc(habitDoc, { title: newTitle.trim() });
-      setHabits((prev) =>
-        prev.map((h) =>
-          h.id === habit.id ? { ...h, title: newTitle.trim() } : h
-        )
+      const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.6,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
+
+      const suggestionText = response.data.choices[0].message.content;
+      const suggestions = suggestionText
+        .split("Habit:")
+        .filter((chunk) => chunk.trim())
+        .map((chunk) => {
+          const [titleLine, benefitLine] = chunk.trim().split("Benefit:");
+          return {
+            title: titleLine.trim(),
+            benefit: benefitLine?.trim() || "",
+          };
+        });
+
+      setAiSuggestions(suggestions);
     } catch (err) {
-      console.error("Error editing habit:", err);
+      console.error("AI suggestion error:", err);
+      alert("Failed to fetch suggestions. Please try again.");
+    }
+
+    setLoadingAI(false);
+  };
+
+  const handleAddSuggestedHabits = async (title) => {
+    const defaultIcon = "🌟"; // or ask user later
+    const defaultXP = 5;
+
+    try {
+      const docRef = await addDoc(collection(db, "habits"), {
+        uid: user.uid,
+        title,
+        icon: defaultIcon,
+        xpReward: defaultXP,
+        completions: {},
+        createdAt: serverTimestamp(),
+      });
+
+      setHabits((prev) => [
+        ...prev,
+        {
+          id: docRef.id,
+          title,
+          icon: defaultIcon,
+          xpReward: defaultXP,
+          completions: {},
+        },
+      ]);
+    } catch (err) {
+      console.error("Error adding suggested habit:", err);
     }
   };
 
   if (loading)
     return (
-      <div className="p-4 text-center text-gray-400 text-lg animate-pulse">
+      <div className="p-4 text-center text-gray-400 animate-pulse">
         Loading your habits...
       </div>
     );
@@ -178,7 +222,37 @@ const Dashboard = () => {
         🎯 Welcome, {user.displayName?.split(" ")[0] || "User"}!
       </h1>
 
-      {/* Add New Habit Form */}
+      {/* AI Suggestion Section */}
+      <div className="bg-indigo-800 p-5 rounded-xl shadow-md mb-10">
+        <h2 className="text-xl font-semibold mb-3 text-white">
+          💡 AI Habit Suggestions
+        </h2>
+        <button
+          onClick={fetchAiSuggestions}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition mb-4"
+        >
+          {loadingAI ? "Thinking..." : "Suggest New Habits"}
+        </button>
+        <div className="grid md:grid-cols-2 gap-4">
+          {aiSuggestions.map((s, i) => (
+            <div
+              key={i}
+              className="bg-gray-700 p-4 rounded-lg shadow text-gray-100"
+            >
+              <h4 className="text-lg font-semibold">{s.title}</h4>
+              <p className="text-sm text-gray-300 mb-2">{s.benefit}</p>
+              <button
+                onClick={() => handleAddSuggestedHabits(s.title)}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+              >
+                Add Habit
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add New Habit */}
       <form
         onSubmit={handleAddHabit}
         className="bg-gray-800 shadow-lg rounded-xl p-5 mb-8"
@@ -191,20 +265,18 @@ const Dashboard = () => {
             type="text"
             value={newHabit.title}
             onChange={(e) =>
-              setNewHabit((prev) => ({ ...prev, title: e.target.value }))
+              setNewHabit({ ...newHabit, title: e.target.value })
             }
-            placeholder="Habit name (e.g. Drink Water)"
-            className="flex-grow w-full sm:w-auto bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Habit name"
+            className="bg-gray-700 text-gray-200 px-4 py-2 rounded w-full sm:flex-grow"
             required
           />
           <input
             type="text"
             value={newHabit.icon}
-            onChange={(e) =>
-              setNewHabit((prev) => ({ ...prev, icon: e.target.value }))
-            }
-            placeholder="Emoji icon (e.g. 💧)"
-            className="w-full sm:w-20 text-center bg-gray-700 border border-gray-600 rounded-md px-2 py-2 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => setNewHabit({ ...newHabit, icon: e.target.value })}
+            placeholder="Emoji"
+            className="w-full sm:w-20 text-center bg-gray-700 px-2 py-2 rounded text-gray-200"
             required
             maxLength={2}
           />
@@ -212,29 +284,25 @@ const Dashboard = () => {
             type="number"
             value={newHabit.xpReward}
             onChange={(e) =>
-              setNewHabit((prev) => ({ ...prev, xpReward: e.target.value }))
+              setNewHabit({ ...newHabit, xpReward: e.target.value })
             }
-            min={1}
-            max={100}
-            className="w-full sm:w-20 text-center bg-gray-700 border border-gray-600 rounded-md px-2 py-2 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:w-20 text-center bg-gray-700 px-2 py-2 rounded text-gray-200"
             placeholder="XP"
             required
           />
           <button
             type="submit"
-            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md transition duration-200"
+            className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded"
           >
-            Add Habit
+            Add
           </button>
         </div>
       </form>
 
-      {/* Habit List */}
+      {/* Habit Cards */}
       <div className="grid gap-6">
         {habits.length === 0 ? (
-          <p className="text-gray-400 text-center">
-            You have no habits yet. Add one above to get started!
-          </p>
+          <p className="text-gray-400 text-center">You have no habits yet.</p>
         ) : (
           habits.map((habit) => {
             const today = formatDate(new Date());
@@ -247,51 +315,41 @@ const Dashboard = () => {
                 key={habit.id}
                 className="bg-gray-800 p-4 rounded-lg shadow flex flex-col sm:flex-row sm:items-center justify-between"
               >
-                <div className="flex items-center space-x-4 mb-3 sm:mb-0 flex-wrap sm:flex-nowrap">
+                <div className="flex items-center gap-4">
                   <span className="text-3xl">{habit.icon}</span>
-                  <div className="min-w-0">
-                    <h3 className="text-xl font-semibold truncate">
-                      {habit.title}
-                    </h3>
-                    <p className="text-sm text-gray-400 truncate">
-                      XP: {habit.xpReward} | Current Streak: {currentStreak}d |
+                  <div>
+                    <h3 className="text-xl font-semibold">{habit.title}</h3>
+                    <p className="text-sm text-gray-400">
+                      XP: {habit.xpReward} | Current: {currentStreak}d |
                       Longest: {longestStreak}d
                     </p>
                     <StreakCalendar completions={habit.completions} />
                   </div>
                 </div>
 
-                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mt-3 sm:mt-0">
                   {!completedToday ? (
                     <button
                       onClick={() => handleToggleComplete(habit)}
-                      className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white font-semibold transition w-full sm:w-auto"
-                      aria-label={`Mark habit ${habit.title} complete today`}
+                      className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white"
                     >
-                      Mark Complete Today
+                      Mark Complete
                     </button>
                   ) : (
-                    <button
-                      disabled
-                      className="bg-green-600 px-4 py-2 rounded text-white font-semibold cursor-not-allowed w-full sm:w-auto"
-                      aria-label={`Habit ${habit.title} completed today`}
-                    >
+                    <span className="bg-green-600 px-4 py-2 rounded text-white font-semibold">
                       Completed Today ✅
-                    </button>
+                    </span>
                   )}
 
                   <button
                     onClick={() => handleEditHabit(habit)}
-                    className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-gray-900 font-semibold transition w-full sm:w-auto"
-                    aria-label={`Edit habit ${habit.title}`}
+                    className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-gray-900 font-semibold"
                   >
                     Edit
                   </button>
-
                   <button
                     onClick={() => handleDeleteHabit(habit.id)}
-                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-white font-semibold transition w-full sm:w-auto"
-                    aria-label={`Delete habit ${habit.title}`}
+                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-white font-semibold"
                   >
                     Delete
                   </button>
@@ -301,6 +359,92 @@ const Dashboard = () => {
           })
         )}
       </div>
+      {editingHabit && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white text-gray-900 rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h2 className="text-xl font-bold mb-4">Edit Habit</h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const { id, title, icon, xpReward } = editingHabit;
+                try {
+                  await updateDoc(doc(db, "habits", id), {
+                    title: title.trim(),
+                    icon: icon.trim(),
+                    xpReward: Number(xpReward),
+                  });
+                  setHabits((prev) =>
+                    prev.map((h) =>
+                      h.id === id
+                        ? { ...h, title, icon, xpReward: Number(xpReward) }
+                        : h
+                    )
+                  );
+                  setEditingHabit(null);
+                } catch (err) {
+                  console.error("Error updating habit:", err);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label className="block mb-1 font-semibold">Habit Title</label>
+                <input
+                  type="text"
+                  value={editingHabit.title}
+                  onChange={(e) =>
+                    setEditingHabit({ ...editingHabit, title: e.target.value })
+                  }
+                  className="w-full px-4 py-2 rounded border border-gray-300"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-semibold">Emoji</label>
+                <input
+                  type="text"
+                  value={editingHabit.icon}
+                  maxLength={2}
+                  onChange={(e) =>
+                    setEditingHabit({ ...editingHabit, icon: e.target.value })
+                  }
+                  className="w-full px-4 py-2 rounded border border-gray-300"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-semibold">XP Reward</label>
+                <input
+                  type="number"
+                  value={editingHabit.xpReward}
+                  onChange={(e) =>
+                    setEditingHabit({
+                      ...editingHabit,
+                      xpReward: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-2 rounded border border-gray-300"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingHabit(null)}
+                  className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
