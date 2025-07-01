@@ -134,7 +134,10 @@ const Dashboard = () => {
   };
 
   const fetchAiSuggestions = async () => {
-    if (!habits.length) return;
+    if (!habits.length) {
+      alert("Please add at least one habit to get personalized suggestions.");
+      return;
+    }
     setLoadingAI(true);
 
     const titles = habits.map((h) => h.title).join(", ");
@@ -147,7 +150,7 @@ Benefit: <one-line reason why it’s useful>`;
       const response = await axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
-          model: "gpt-3.5-turbo",
+          model: "gpt-4-0125-preview",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.6,
         },
