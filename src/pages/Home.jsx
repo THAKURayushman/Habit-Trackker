@@ -72,9 +72,9 @@ const Home = () => {
           🚀 What Makes Habit Hero Awesome?
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {/* Feature 1 */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg transform hover:scale-105 transition duration-300">
+        <div className="flex overflow-x-auto space-x-6 pb-4 snap-x snap-mandatory scroll-smooth">
+          {/* Feature Card 1 */}
+          <div className="min-w-[250px] sm:min-w-[300px] bg-gray-800 p-6 rounded-xl shadow-lg snap-start">
             <div className="text-4xl mb-3">📈</div>
             <h3 className="text-xl font-semibold mb-2 text-white">
               Track Your Progress
@@ -85,8 +85,8 @@ const Home = () => {
             </p>
           </div>
 
-          {/* Feature 2 */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg transform hover:scale-105 transition duration-300">
+          {/* Feature Card 2 */}
+          <div className="min-w-[250px] sm:min-w-[300px] bg-gray-800 p-6 rounded-xl shadow-lg snap-start">
             <div className="text-4xl mb-3">🔥</div>
             <h3 className="text-xl font-semibold mb-2 text-white">
               Earn Streaks
@@ -97,8 +97,8 @@ const Home = () => {
             </p>
           </div>
 
-          {/* Feature 3 */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg transform hover:scale-105 transition duration-300">
+          {/* Feature Card 3 */}
+          <div className="min-w-[250px] sm:min-w-[300px] bg-gray-800 p-6 rounded-xl shadow-lg snap-start">
             <div className="text-4xl mb-3">🎮</div>
             <h3 className="text-xl font-semibold mb-2 text-white">
               Gamified XP System
@@ -108,14 +108,26 @@ const Home = () => {
             </p>
           </div>
 
-          {/* Feature 4 */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg transform hover:scale-105 transition duration-300">
+          {/* Feature Card 4 */}
+          <div className="min-w-[250px] sm:min-w-[300px] bg-gray-800 p-6 rounded-xl shadow-lg snap-start">
             <div className="text-4xl mb-3">📊</div>
             <h3 className="text-xl font-semibold mb-2 text-white">
               Insights & Analytics
             </h3>
             <p className="text-gray-400 text-sm">
               Visualize your growth with weekly stats and habit analytics.
+            </p>
+          </div>
+
+          {/* Feature Card 5 - AI */}
+          <div className="min-w-[250px] sm:min-w-[300px] bg-gray-800 p-6 rounded-xl shadow-lg snap-start">
+            <div className="text-4xl mb-3">🤖</div>
+            <h3 className="text-xl font-semibold mb-2 text-white">
+              AI Habit Suggestions
+            </h3>
+            <p className="text-gray-400 text-sm">
+              Get smart daily habit ideas tailored to your current routine using
+              AI-powered suggestions.
             </p>
           </div>
         </div>
